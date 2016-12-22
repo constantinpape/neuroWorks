@@ -7,8 +7,8 @@ from collections import OrderedDict
 
 import tensorflow as tf
 
-from tf_unet import util
-from tf_unet.layers import (weight_variable, weight_variable_devonc, bias_variable,
+from unet_mod.util import *
+from unet_mod.layers import (weight_variable, weight_variable_devonc, bias_variable,
                             conv2d, deconv2d, max_pool, crop_and_concat, pixel_wise_softmax_2,
                             cross_entropy)
 
@@ -361,7 +361,7 @@ class Trainer(object):
                     # Run optimization op (backprop)
                     _, loss, lr, gradients = sess.run((self.optimizer, self.net.cost, self.learning_rate_node, self.net.gradients_node),
                                                       feed_dict={self.net.x: batch_x,
-                                                                 self.net.y: util.crop_to_shape(batch_y, pred_shape),
+                                                                 self.net.y: crop_to_shape(batch_y, pred_shape),
                                                                  self.net.keep_prob: dropout})
 
                     if avg_gradients is None:
@@ -373,7 +373,7 @@ class Trainer(object):
                     self.norm_gradients_node.assign(norm_gradients).eval()
 
                     if step % display_step == 0:
-                        self.output_minibatch_stats(sess, summary_writer, step, batch_x, util.crop_to_shape(batch_y, pred_shape))
+                        self.output_minibatch_stats(sess, summary_writer, step, batch_x, crop_to_shape(batch_y, pred_shape))
 
                     total_loss += loss
 
@@ -393,16 +393,17 @@ class Trainer(object):
         pred_shape = prediction.shape
 
         loss = sess.run(self.net.cost, feed_dict={self.net.x: batch_x,
-                                                       self.net.y: util.crop_to_shape(batch_y, pred_shape),
+                                                       self.net.y: crop_to_shape(batch_y, pred_shape),
                                                        self.net.keep_prob: 1.})
 
         print("Verification error= {:.1f}%, loss= {:.4f}".format(error_rate(prediction,
-                                                                          util.crop_to_shape(batch_y,
+                                                                          crop_to_shape(batch_y,
                                                                                              prediction.shape)),
                                                                           loss))
 
-        img = util.combine_img_prediction(batch_x, batch_y, prediction)
-        util.save_image(img, "%s/%s.jpg"%(self.prediction_path, name))
+        # FIXME smth hacky is going on here
+        img = combine_img_prediction(batch_x, batch_y, prediction)
+        save_image(img, "%s/%s.jpg"%(self.prediction_path, name))
 
         return pred_shape
 

@@ -73,8 +73,9 @@ class BaseDataProvider(object):
         X = np.zeros((n, nx, ny, self.channels))
         Y = np.zeros((n, nx, ny, self.n_class))
 
-        X[0] = train_data
-        Y[0] = labels
+        # oO retardo
+        #X[0] = train_data
+        #Y[0] = labels
         for i in range(0, n):
             train_data, labels = self._load_data_and_label()
             X[i] = train_data

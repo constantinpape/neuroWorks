@@ -51,6 +51,7 @@ def to_rgb(img):
         img = np.tile(img, 3)
 
     img[np.isnan(img)] = 0
+    #print( np.amin(img), np.amax(img) )
     img -= np.amin(img)
     img /= np.amax(img)
     img *= 255
