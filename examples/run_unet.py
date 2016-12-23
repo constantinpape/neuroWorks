@@ -1,9 +1,15 @@
 from unet_mod import hdf5_gen
 from unet_mod import unet
 
-train_path = '/home/constantin/Work/neurodata_hdd/isbi12_data/raw/train-volume.h5'
-labels_path = '/home/constantin/Work/neurodata_hdd/isbi12_data/groundtruth/train-labels.h5'
-test_path = '/home/constantin/Work/neurodata_hdd/isbi12_data/raw/test-volume.h5'
+# paths on sirherny
+#train_path = '/home/constantin/Work/neurodata_hdd/isbi12_data/raw/train-volume.h5'
+#labels_path = '/home/constantin/Work/neurodata_hdd/isbi12_data/groundtruth/train-labels.h5'
+#test_path = '/home/constantin/Work/neurodata_hdd/isbi12_data/raw/test-volume.h5'
+
+# mobile paths
+train_path = '/home/consti/Work/data_neuro/nature_experiments/isbi12_data/raw/train-volume.h5'
+labels_path = '/home/consti/Work/data_neuro/nature_experiments/isbi12_data/groundtruth/train-labels.h5'
+test_path = '/home/consti/Work/data_neuro/nature_experiments/isbi12_data/raw/test-volume.h5'
 
 def train_isbi():
     train_gen = hdf5_gen.Hdf5DataProvider2D(train_path, labels_path)
