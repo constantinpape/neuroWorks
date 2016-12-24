@@ -231,7 +231,7 @@ def run_example():
 #
 # ---
 
-def exercise():`
+def exercise():
 
     pickle_file = 'notMNIST.pickle'
 
@@ -297,19 +297,23 @@ def exercise():`
       b2 = tf.Variable(tf.zeros([num_labels]))
 
       # Training computation.
-      l1 = rf.nn.relu( tf.matmul(tf_train_dataset, w1) + b1 )
-      l2 = tf.matmul( l1, w2) + b2
+      def architecture(inp):
+        l1 = tf.nn.relu( tf.matmul(inp, w1) + b1 )
+        l2 = tf.matmul( l1, w2) + b2
+        return l2
+
+      logits = architecture(tf_train_dataset)
+
       loss = tf.reduce_mean(
-        tf.nn.softmax_cross_entropy_with_logits(l2, tf_train_labels))
+        tf.nn.softmax_cross_entropy_with_logits(logits, tf_train_labels))
 
       # Optimizer.
       optimizer = tf.train.GradientDescentOptimizer(0.5).minimize(loss)
 
       # Predictions for the training, validation, and test data.
       train_prediction = tf.nn.softmax(logits)
-      valid_prediction = tf.nn.softmax(
-        tf.matmul(tf_valid_dataset, weights) + biases)
-      test_prediction = tf.nn.softmax(tf.matmul(tf_test_dataset, weights) + biases)
+      valid_prediction = tf.nn.softmax(architecture(valid_dataset))
+      test_prediction  = tf.nn.softmax(architecture(test_dataset))
 
 
     # Let's run it:
@@ -347,6 +351,6 @@ if __name__ == '__main__':
     exercise()
 
 # Accuracies:
-# LogRegression - GD   :
-# LogRegression - SGD  :
-# 2 Layer Network - SGD:
+# LogRegression - GD   : 82.6 %
+# LogRegression - SGD  : 85.5 %
+# 2 Layer Network - SGD: 89.2 %
