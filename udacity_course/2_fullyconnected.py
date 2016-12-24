@@ -26,7 +26,7 @@ from six.moves import range
 
 # In[ ]:
 
-def load_data():
+def run_example():
 
     pickle_file = 'notMNIST.pickle'
 
@@ -65,8 +65,6 @@ def load_data():
     print('Validation set', valid_dataset.shape, valid_labels.shape)
     print('Test set', test_dataset.shape, test_labels.shape)
 
-    return train_dataset, train_labels, valid_dataset, valid_labels, test_dataset, test_labels
-
 
 # We're first going to train a multinomial logistic regression using simple gradient descent.
 #
@@ -83,11 +81,6 @@ def load_data():
 #
 # Let's load all the data into TensorFlow and build the computation graph corresponding to our training:
 
-
-def log_regression(
-        train_dataset, train_labels,
-        valid_dataset, valid_labels,
-        test_dataset, test_labels):
 
     # With gradient descent training, even this much data is prohibitive.
     # Subset the training data for faster turnaround.
@@ -144,7 +137,7 @@ def log_regression(
       # This is a one-time operation which ensures the parameters get initialized as
       # we described in the graph: random weights for the matrix, zeros for the
       # biases.
-      tf.global_variables_initializer().run()
+      tf.initialize_all_variables().run()
       print('Initialized')
       for step in range(num_steps):
         # Run the computations. We tell .run() that we want to run the optimizer,
@@ -207,7 +200,7 @@ def log_regression(
     num_steps = 3001
 
     with tf.Session(graph=graph) as session:
-      tf.global_variables_initializer().run()
+      tf.initialize_all_variables().run()
       print("Initialized")
       for step in range(num_steps):
         # Pick an offset within the training data, which has been randomized.
@@ -239,13 +232,8 @@ def log_regression(
 # ---
 
 
-if __name__ == '__main__';
-    train_dataset, train_labels, valid_dataset, valid_labels, test_dataset, test_labels = load_data()
-
-    log_regression(
-            train_dataset, train_labels,
-            valid_dataset, valid_labels,
-            test_dataset, test_labels)
+if __name__ == '__main__':
+    run_example()
 
 
 
