@@ -100,7 +100,11 @@ def log_reg(beta, verbose = False, num_steps = 3001):
         print("Test accuracy: %.1f%%" % accuracy(test_prediction.eval(), test_labels))
 
 
-def two_layer_nn(beta, verbose = False, num_steps = 3001, dropout = 1.):
+def two_layer_nn(beta,
+        verbose = False,
+        num_steps = 3001,
+        dropout = 1.,
+        eta_decay = False):
 
     batch_size = 128
 
@@ -111,8 +115,10 @@ def two_layer_nn(beta, verbose = False, num_steps = 3001, dropout = 1.):
         # at run time with a training minibatch.
         x = tf.placeholder(tf.float32, shape=(None, image_size * image_size))
         y = tf.placeholder(tf.float32, shape=(None, num_labels))
-        # Fixed validation and training sets
+
         keep_prob = tf.placeholder(tf.float32)
+        global_step = tf.Variable(0)
+        learning_rate = tf.train.exponential_decay(.5, global_step, 1000, .9)
 
         # Variables.
         n_hidden = 1024
@@ -135,7 +141,10 @@ def two_layer_nn(beta, verbose = False, num_steps = 3001, dropout = 1.):
           tf.nn.softmax_cross_entropy_with_logits(l2, y)) + beta * (tf.nn.l2_loss(w1) + tf.nn.l2_loss(w2))
 
         # Optimizer.
-        optimizer = tf.train.GradientDescentOptimizer(0.5).minimize(loss)
+        if eta_decay:
+            optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step = global_step)
+        else:
+            optimizer = tf.train.GradientDescentOptimizer(0.5).minimize(loss)
 
         # Evaluation
         out = tf.nn.softmax(l2)
@@ -219,10 +228,18 @@ def ex3():
     two_layer_nn(beta, dropout = .8, num_steps = 25)
 
 
+# Ex 4: Best possible performance by going deeper or
+# introducing learning rate decay
+
+def ex4():
+    beta = 1e-3
+    two_layer_nn(beta, dropout = .9, eta_decay = True, num_steps = 20000)
+
+
 
 
 if __name__ == '__main__':
-    ex3()
+    ex4()
 
 
 # Results
@@ -256,3 +273,7 @@ if __name__ == '__main__':
 # 92.6 %
 # only 25 batches
 # 82.5 %
+
+# Ex 4:
+# With beta : 1e-3, 0.9 dropout, 2*1e5 steps and weight decay:
+# 95.2 %
