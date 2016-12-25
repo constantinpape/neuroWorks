@@ -101,6 +101,7 @@ def log_reg(beta, verbose = False, num_steps = 3001):
 
 
 def two_layer_nn(beta, verbose = False, num_steps = 3001, dropout = 1.):
+
     batch_size = 128
 
     graph = tf.Graph()
@@ -138,7 +139,7 @@ def two_layer_nn(beta, verbose = False, num_steps = 3001, dropout = 1.):
 
         # Evaluation
         out = tf.nn.softmax(l2)
-        tf_accuracy = tf.reduce_mean( tf.cast(
+        tf_accuracy = 100. * tf.reduce_mean( tf.cast(
             tf.equal(tf.argmax(out,1), tf.argmax(y,1)),
             tf.float32 ))
 
@@ -172,8 +173,10 @@ def two_layer_nn(beta, verbose = False, num_steps = 3001, dropout = 1.):
                                             keep_prob : 1.}))
 
         print("Run with beta = %f" % (beta,))
-        # FIXME this does not work for some reason
-        #print("Train accuracy: %.1f%%" % accuracy(train_prediction.eval(), train_labels))
+        print("Train accuracy: %.1f%%" % session.run(
+            tf_accuracy, feed_dict={x : train_dataset,
+                                    y : train_labels,
+                                    keep_prob : 1.}))
         print("Test accuracy: %.1f%%" % session.run(
             tf_accuracy, feed_dict={x : test_dataset,
                                     y : test_labels,
@@ -193,6 +196,10 @@ def ex1():
 
 # Ex 2: Use just a few training batches.
 # To show effects of overfitting
+# I don't fully get this exercise...
+# As we are only seeing a fraction of the training data, we
+# can't overfit to the whole training set
+# probably we'd see overfitting if we monitor the training error for the batches during training
 
 def ex2():
 
@@ -208,7 +215,8 @@ def ex2():
 def ex3():
 
     beta = 1e-3
-    two_layer_nn(beta, dropout = 1.)
+    two_layer_nn(beta, dropout = .8)
+    two_layer_nn(beta, dropout = .8, num_steps = 25)
 
 
 
@@ -244,5 +252,7 @@ if __name__ == '__main__':
 
 # Ex 3:
 # beta = 1e-3
-# Dropout .6 full batches
-#
+# Dropout .8 full batches
+# 92.6 %
+# only 25 batches
+# 82.5 %
