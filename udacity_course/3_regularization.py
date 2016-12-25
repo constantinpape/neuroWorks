@@ -6,7 +6,7 @@ import tensorflow as tf
 from six.moves import cPickle as pickle
 
 image_size = 28
-wnum_labels = 10
+num_labels = 10
 
 def load_data():
 
@@ -34,18 +34,13 @@ def load_data():
 
     return train_dataset, train_labels, valid_dataset, valid_labels, test_dataset, test_labels
 
+train_dataset, train_labels, valid_dataset, valid_labels, test_dataset, test_labels = load_data()
 
 def accuracy(predictions, labels):
     return (100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1)) / predictions.shape[0])
 
 
-#
-# Problem 1
-# NN and log reg with l2 norm
-#
-train_dataset, train_labels, valid_dataset, valid_labels, test_dataset, test_labels = load_data()
-
-def log_reg(beta):
+def log_reg(beta, verbose = False, num_steps = 3001):
 
     batch_size = 128
     graph = tf.Graph()
@@ -78,8 +73,6 @@ def log_reg(beta):
           tf.matmul(tf_valid_dataset, weights) + biases)
         test_prediction = tf.nn.softmax(tf.matmul(tf_test_dataset, weights) + biases)
 
-    num_steps = 3001
-
     with tf.Session(graph=graph) as session:
         tf.initialize_all_variables().run()
         for step in range(num_steps):
@@ -95,17 +88,19 @@ def log_reg(beta):
             feed_dict = {tf_train_dataset : batch_data, tf_train_labels : batch_labels}
             _, l, predictions = session.run(
               [optimizer, loss, train_prediction], feed_dict=feed_dict)
-            if (step % 500 == 0):
+            if (step % 500 == 0 and verbose):
                 print("Minibatch loss at step %d: %f" % (step, l))
                 print("Minibatch accuracy: %.1f%%" % accuracy(predictions, batch_labels))
                 print("Validation accuracy: %.1f%%" % accuracy(
                   valid_prediction.eval(), valid_labels))
 
-    print("Run with beta = %f" % (beta,))
-    print("Test accuracy: %.1f%%" % accuracy(test_prediction.eval(), test_labels))
+        print("Run with beta = %f" % (beta,))
+        # FIXME this does not work for some reason
+        #print("Train accuracy: %.1f%%" % accuracy(train_prediction.eval(), train_labels))
+        print("Test accuracy: %.1f%%" % accuracy(test_prediction.eval(), test_labels))
 
 
-def two_layer_nn(beta):
+def two_layer_nn(beta, verbose = False, num_steps = 3001, dropout = 1.):
     batch_size = 128
 
     graph = tf.Graph()
@@ -113,11 +108,10 @@ def two_layer_nn(beta):
 
         # Input data. For the training data, we use a placeholder that will be fed
         # at run time with a training minibatch.
-        tf_train_dataset = tf.placeholder(tf.float32,
-                                          shape=(batch_size, image_size * image_size))
-        tf_train_labels = tf.placeholder(tf.float32, shape=(batch_size, num_labels))
-        tf_valid_dataset = tf.constant(valid_dataset)
-        tf_test_dataset = tf.constant(test_dataset)
+        x = tf.placeholder(tf.float32, shape=(None, image_size * image_size))
+        y = tf.placeholder(tf.float32, shape=(None, num_labels))
+        # Fixed validation and training sets
+        keep_prob = tf.placeholder(tf.float32)
 
         # Variables.
         n_hidden = 1024
@@ -132,27 +126,21 @@ def two_layer_nn(beta):
           tf.truncated_normal([n_hidden, num_labels]))
         b2 = tf.Variable(tf.zeros([num_labels]))
 
-        # Training computation.
-        def architecture(inp):
-            l1 = tf.nn.relu( tf.matmul(inp, w1) + b1 )
-            l2 = tf.matmul( l1, w2) + b2
-            return l2
-
-        logits = architecture(tf_train_dataset)
+        l1 = tf.nn.relu( tf.matmul(x, w1) + b1 )
+        l1 = tf.nn.dropout(l1, keep_prob)
+        l2 = tf.matmul( l1, w2) + b2
 
         loss = tf.reduce_mean(
-          tf.nn.softmax_cross_entropy_with_logits(logits, tf_train_labels))
+          tf.nn.softmax_cross_entropy_with_logits(l2, y)) + beta * (tf.nn.l2_loss(w1) + tf.nn.l2_loss(w2))
 
         # Optimizer.
         optimizer = tf.train.GradientDescentOptimizer(0.5).minimize(loss)
 
-        # Predictions for the training, validation, and test data.
-        train_prediction = tf.nn.softmax(logits)
-        valid_prediction = tf.nn.softmax(architecture(valid_dataset))
-        test_prediction  = tf.nn.softmax(architecture(test_dataset))
-
-
-    num_steps = 3001
+        # Evaluation
+        out = tf.nn.softmax(l2)
+        tf_accuracy = tf.reduce_mean( tf.cast(
+            tf.equal(tf.argmax(out,1), tf.argmax(y,1)),
+            tf.float32 ))
 
     with tf.Session(graph=graph) as session:
         tf.initialize_all_variables().run()
@@ -164,38 +152,97 @@ def two_layer_nn(beta):
             # Generate a minibatch.
             batch_data = train_dataset[offset:(offset + batch_size), :]
             batch_labels = train_labels[offset:(offset + batch_size), :]
-            # Prepare a dictionary telling the session where to feed the minibatch.
-            # The key of the dictionary is the placeholder node of the graph to be fed,
-            # and the value is the numpy array to feed to it.
-            feed_dict = {tf_train_dataset : batch_data, tf_train_labels : batch_labels}
-            _, l, predictions = session.run(
-              [optimizer, loss, train_prediction], feed_dict=feed_dict)
-            if (step % 500 == 0):
+
+            # run optimisation with dropout
+            session.run(optimizer, feed_dict = {x : batch_data,
+                                    y : batch_labels,
+                                    keep_prob : dropout} )
+
+            l, predictions = session.run(
+                [loss, out], feed_dict = {x : batch_data,
+                                         y : batch_labels,
+                                         keep_prob : 1.} )
+
+            if (step % 500 == 0 and verbose):
                 print("Minibatch loss at step %d: %f" % (step, l))
                 print("Minibatch accuracy: %.1f%%" % accuracy(predictions, batch_labels))
-                print("Validation accuracy: %.1f%%" % accuracy(
-                  valid_prediction.eval(), valid_labels))
+                print("Validation accuracy: %.1f%%" % session.run(
+                    tf_accuracy, feed_dict={x : valid_dataset,
+                                            y : valid_labels,
+                                            keep_prob : 1.}))
 
-    print("Test accuracy: %.1f%%" % accuracy(test_prediction.eval(), test_labels))
+        print("Run with beta = %f" % (beta,))
+        # FIXME this does not work for some reason
+        #print("Train accuracy: %.1f%%" % accuracy(train_prediction.eval(), train_labels))
+        print("Test accuracy: %.1f%%" % session.run(
+            tf_accuracy, feed_dict={x : test_dataset,
+                                    y : test_labels,
+                                    keep_prob : 1.}))
 
+
+# Ex 1: NN and log reg with l2 norm
 
 def ex1():
 
-    for beta in (.1,.2,.3):
+    for beta in (1e-3,5*1e-3,1e-2,5*1e-2):
         log_reg(beta)
 
-    for beta in (.1,.2,.3):
+    for beta in (1e-4,5*1e-4,1e-3,5*1e-3,1e-2,5*1e-2):
         two_layer_nn(beta)
 
 
+# Ex 2: Use just a few training batches.
+# To show effects of overfitting
+
+def ex2():
+
+    beta = 1e-3
+    n_batches = 25
+
+    log_reg(beta, num_steps = n_batches)
+    two_layer_nn(beta, num_steps = n_batches)
+
+
+# Ex 3: dropout
+
+def ex3():
+
+    beta = 1e-3
+    two_layer_nn(beta, dropout = 1.)
+
+
+
+
+if __name__ == '__main__':
+    ex3()
+
 
 # Results
+
 # Ex 1:
 # LogReg:
-# beta = .1:
-# beta = .2:
-# beta = .3:
+# beta = .001: 88.8 %
+# beta = .005: 88.9 %
+# beta = .01:  88.6 %
+# beta = .05:  87.1 %
 # TwoLayerNN:
-# beta = .1:
-# beta = .2:
-# beta = .3:
+# beta = .0001: 89.2 %
+# beta = .0005: 91.0 %
+# beta = .001:  92.8 %
+# beta = .005:  91.5 %
+# beta = .01:   90.2 %
+# beta = .05:   85.3 %
+
+# Ex 2:
+# beta = 1e-3, 25 batches
+# LogReg
+# acc_train = - TODO fix train accuracy
+# acc_test  = 63.0 %
+# TwoLayerNN
+# acc_train = -
+# acc_test  = 84.0 %
+
+# Ex 3:
+# beta = 1e-3
+# Dropout .6 full batches
+#
