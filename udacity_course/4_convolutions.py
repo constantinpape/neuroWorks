@@ -41,12 +41,12 @@ print('Validation set', valid_dataset.shape, valid_labels.shape)
 print('Test set', test_dataset.shape, test_labels.shape)
 
 
-def vanilla_cnn():
+def vanilla_cnn(num_steps = 1001, verbose = False):
 
-    batch_size = 16
     patch_size = 5
     depth = 16
     num_hidden = 64
+    batch_size = 16
 
     graph = tf.Graph()
 
@@ -55,7 +55,7 @@ def vanilla_cnn():
         # Input data.
         x = tf.placeholder(
           tf.float32, shape=(None, image_size, image_size, num_channels))
-        tf_train_labels = tf.placeholder(tf.float32, shape=(batch_size, num_labels))
+        y = tf.placeholder(tf.float32, shape=(None, num_labels))
 
         # Variables.
         layer1_weights = tf.Variable(tf.truncated_normal(
@@ -78,14 +78,14 @@ def vanilla_cnn():
             conv = tf.nn.conv2d(hidden, layer2_weights, [1, 2, 2, 1], padding='SAME')
             hidden = tf.nn.relu(conv + layer2_biases)
             shape = hidden.get_shape().as_list()
-            reshape = tf.reshape(hidden, [shape[0], shape[1] * shape[2] * shape[3]])
+            reshape = tf.reshape(hidden, [-1, shape[1] * shape[2] * shape[3]])
             hidden = tf.nn.relu(tf.matmul(reshape, layer3_weights) + layer3_biases)
             return tf.matmul(hidden, layer4_weights) + layer4_biases
 
         # Training computation.
         logits = model(x)
         loss = tf.reduce_mean(
-          tf.nn.softmax_cross_entropy_with_logits(logits, tf_train_labels))
+          tf.nn.softmax_cross_entropy_with_logits(logits, y))
 
         # Optimizer.
         optimizer = tf.train.GradientDescentOptimizer(0.05).minimize(loss)
@@ -93,47 +93,231 @@ def vanilla_cnn():
         # Predictions for the training, validation, and test data.
         prediction = tf.nn.softmax(logits)
 
-        return optimizer, prediction
-
-
-def run_cnn(optimizer, prediction, verbose = False, num_steps = 1001):
-
-    y = tf.placeholder(tf.float32, shape=(None, num_labels))
-
-    accuracy = 100. * tf.reduce_mean( tf.cast(
+        accuracy = 100. * tf.reduce_mean( tf.cast(
             tf.equal(tf.argmax(prediction,1), tf.argmax(y,1)),
             tf.float32 ))
 
     with tf.Session(graph=graph) as session:
-        tf.global_variables_initializer().run()
+        tf.initialize_all_variables().run()
         print('Initialized')
         for step in range(num_steps):
             offset = (step * batch_size) % (train_labels.shape[0] - batch_size)
             batch_data = train_dataset[offset:(offset + batch_size), :, :, :]
             batch_labels = train_labels[offset:(offset + batch_size), :]
-            feed_dict = {tf_train_dataset : batch_data, tf_train_labels : batch_labels}
             _, l, predictions = session.run(
-              [optimizer, loss, train_prediction], feed_dict=feed_dict)
+            [optimizer, loss, prediction], feed_dict={x:batch_data,y:batch_labels})
             if (step % 50 == 0 and verbose):
                 print('Minibatch loss at step %d: %f' % (step, l))
-                print('Minibatch accuracy: %.1f%%' % session.run(accuracy, feed_dict={x:batch_data,y:batch_labels))
-                print('Validation accuracy: %.1f%%' % session.run(accuracy, feed_dict={x:valid_data,y:valid_labels))
+                print('Minibatch accuracy: %.1f%%' % session.run(accuracy, feed_dict={x:batch_data,y:batch_labels}))
+                print('Validation accuracy: %.1f%%' % session.run(accuracy, feed_dict={x:valid_dataset,y:valid_labels}))
 
-            print('Test accuracy: %.1f%%' % session.run(accuracy, feed_dict={x:test_data,y:test_labels))
+        print('Test accuracy: %.1f%%' % session.run(accuracy, feed_dict={x:test_dataset,y:test_labels}))
+
+
+def mpool_cnn(num_steps = 1001, verbose = False):
+
+    patch_size = 5
+    depth = 16
+    num_hidden = 64
+    batch_size = 16
+
+    graph = tf.Graph()
+
+    with graph.as_default():
+
+        # Input data.
+        x = tf.placeholder(
+          tf.float32, shape=(None, image_size, image_size, num_channels))
+        y = tf.placeholder(tf.float32, shape=(None, num_labels))
+
+        # Variables.
+        layer1_weights = tf.Variable(tf.truncated_normal(
+            [patch_size, patch_size, num_channels, depth], stddev=0.1))
+        layer1_biases = tf.Variable(tf.zeros([depth]))
+        layer2_weights = tf.Variable(tf.truncated_normal(
+            [patch_size, patch_size, depth, depth], stddev=0.1))
+        layer2_biases = tf.Variable(tf.constant(1.0, shape=[depth]))
+        layer3_weights = tf.Variable(tf.truncated_normal(
+            [image_size // 4 * image_size // 4 * depth, num_hidden], stddev=0.1))
+        layer3_biases = tf.Variable(tf.constant(1.0, shape=[num_hidden]))
+        layer4_weights = tf.Variable(tf.truncated_normal(
+            [num_hidden, num_labels], stddev=0.1))
+        layer4_biases = tf.Variable(tf.constant(1.0, shape=[num_labels]))
+
+        # Model.
+        def model(data):
+
+            # conv layer 1
+            conv = tf.nn.conv2d(data, layer1_weights, [1, 1, 1, 1], padding='SAME')
+            hidden = tf.nn.relu(conv + layer1_biases)
+            mpool = tf.nn.max_pool(hidden, [1,2,2,1], [1,2,2,1], padding='SAME')
+
+            # conv layer 2
+            conv = tf.nn.conv2d(mpool, layer2_weights, [1, 1, 1, 1], padding='SAME')
+            hidden = tf.nn.relu(conv + layer2_biases)
+            mpool = tf.nn.max_pool(hidden, [1,2,2,1], [1,2,2,1], padding='SAME')
+
+            # fully connected layer
+            shape = mpool.get_shape().as_list()
+            reshape = tf.reshape(mpool, [-1, shape[1] * shape[2] * shape[3]])
+            hidden = tf.nn.relu(tf.matmul(reshape, layer3_weights) + layer3_biases)
+
+            return tf.matmul(hidden, layer4_weights) + layer4_biases
+
+        # Training computation.
+        logits = model(x)
+        loss = tf.reduce_mean(
+          tf.nn.softmax_cross_entropy_with_logits(logits, y))
+
+        # Optimizer.
+        optimizer = tf.train.GradientDescentOptimizer(0.05).minimize(loss)
+
+        # Predictions for the training, validation, and test data.
+        prediction = tf.nn.softmax(logits)
+
+        accuracy = 100. * tf.reduce_mean( tf.cast(
+            tf.equal(tf.argmax(prediction,1), tf.argmax(y,1)),
+            tf.float32 ))
+
+    with tf.Session(graph=graph) as session:
+        tf.initialize_all_variables().run()
+        print('Initialized')
+        for step in range(num_steps):
+            offset = (step * batch_size) % (train_labels.shape[0] - batch_size)
+            batch_data = train_dataset[offset:(offset + batch_size), :, :, :]
+            batch_labels = train_labels[offset:(offset + batch_size), :]
+            _, l, predictions = session.run(
+            [optimizer, loss, prediction], feed_dict={x:batch_data,y:batch_labels})
+            if (step % 50 == 0 and verbose):
+                print('Minibatch loss at step %d: %f' % (step, l))
+                print('Minibatch accuracy: %.1f%%' % session.run(accuracy, feed_dict={x:batch_data,y:batch_labels}))
+                print('Validation accuracy: %.1f%%' % session.run(accuracy, feed_dict={x:valid_dataset,y:valid_labels}))
+
+        print('Test accuracy: %.1f%%' % session.run(accuracy, feed_dict={x:test_dataset,y:test_labels}))
+
+
+def best_cnn(num_steps = 3001, verbose = False):
+
+    patch_size = 5
+    depth = 16
+    batch_size = 16
+
+    graph = tf.Graph()
+
+    with graph.as_default():
+
+        # Input data.
+        x = tf.placeholder(
+          tf.float32, shape=(None, image_size, image_size, num_channels))
+        y = tf.placeholder(tf.float32, shape=(None, num_labels))
+
+        global_step = tf.Variable(0)
+        learning_rate = tf.train.exponential_decay(.1, global_step, 1000, .9)
+
+        # Variables.
+        layer1_weights = tf.Variable(tf.truncated_normal(
+            [patch_size, patch_size, num_channels, 6], stddev=0.1))
+        layer1_biases = tf.Variable(tf.zeros([6]))
+
+        layer2_weights = tf.Variable(tf.truncated_normal(
+            [patch_size, patch_size, 6, 16], stddev=0.1))
+        layer2_biases = tf.Variable(tf.constant(1.0, shape=[depth]))
+
+        layer3_weights = tf.Variable(tf.truncated_normal(
+            [image_size // 4 * image_size // 4 * 16, 120], stddev=0.1))
+        layer3_biases = tf.Variable(tf.constant(1.0, shape=[120]))
+
+        layer4_weights = tf.Variable(tf.truncated_normal(
+            [120, 84], stddev=0.1))
+        layer4_biases = tf.Variable(tf.constant(1.0, shape=[84]))
+
+        layer5_weights = tf.Variable(tf.truncated_normal(
+            [84, num_labels], stddev=0.1))
+        layer5_biases = tf.Variable(tf.constant(1.0, shape=[num_labels]))
+
+        # Model.
+        def model(data):
+
+            # conv layer 1
+            conv = tf.nn.conv2d(data, layer1_weights, [1, 1, 1, 1], padding='SAME')
+            hidden = tf.nn.relu(conv + layer1_biases)
+            mpool = tf.nn.max_pool(hidden, [1,2,2,1], [1,2,2,1], padding='SAME')
+
+            # conv layer 2
+            conv = tf.nn.conv2d(mpool, layer2_weights, [1, 1, 1, 1], padding='SAME')
+            hidden = tf.nn.relu(conv + layer2_biases)
+            mpool = tf.nn.max_pool(hidden, [1,2,2,1], [1,2,2,1], padding='SAME')
+
+            # fully connected layer 1
+            shape = mpool.get_shape().as_list()
+            reshape = tf.reshape(mpool, [-1, shape[1] * shape[2] * shape[3]])
+            hidden = tf.nn.relu(tf.matmul(reshape, layer3_weights) + layer3_biases)
+
+            # fully connected layer 2
+            hidden = tf.nn.relu(tf.matmul(hidden, layer4_weights) + layer4_biases)
+
+            return tf.matmul(hidden, layer5_weights) + layer5_biases
+
+        # Training computation.
+        logits = model(x)
+        loss = tf.reduce_mean(
+          tf.nn.softmax_cross_entropy_with_logits(logits, y))
+
+        # Optimizer.
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step = global_step)
+
+        # Predictions for the training, validation, and test data.
+        prediction = tf.nn.softmax(logits)
+
+        accuracy = 100. * tf.reduce_mean( tf.cast(
+            tf.equal(tf.argmax(prediction,1), tf.argmax(y,1)),
+            tf.float32 ))
+
+    with tf.Session(graph=graph) as session:
+        tf.initialize_all_variables().run()
+        print('Initialized')
+        for step in range(num_steps):
+            offset = (step * batch_size) % (train_labels.shape[0] - batch_size)
+            batch_data = train_dataset[offset:(offset + batch_size), :, :, :]
+            batch_labels = train_labels[offset:(offset + batch_size), :]
+            _, l, predictions = session.run(
+            [optimizer, loss, prediction], feed_dict={x:batch_data,y:batch_labels})
+            if (step % 50 == 0 and verbose):
+                print('Minibatch loss at step %d: %f' % (step, l))
+                print('Minibatch accuracy: %.1f%%' % session.run(accuracy, feed_dict={x:batch_data,y:batch_labels}))
+                print('Validation accuracy: %.1f%%' % session.run(accuracy, feed_dict={x:valid_dataset,y:valid_labels}))
+
+        print('Test accuracy: %.1f%%' % session.run(accuracy, feed_dict={x:test_dataset,y:test_labels}))
 
 
 
 def run_vanilla():
-    opt, pred = vanilla_cnn()
-    run_cnn(opt, pred, True)
+    vanilla_cnn(verbose = True)
 
 
+def ex1():
+    mpool_cnn(verbose = True)
 
-if __name__ == '__main__':
-    run_vanilla()
+
+def ex2():
+    best_cnn(verbose = True)
 
 
 # Ex 1: Replace stride 2 convolutions with max pooling of stride 2 and size 2
 # ( tf.nn.max_pool() )
 
 # Ex 2: Best performance of a convnet via Architecture (cf. LeNet5), Dropout, learning rate decay
+
+
+if __name__ == '__main__':
+    #run_vanilla()
+    ex2()
+
+
+# Results:
+
+# Vanilla CNN: 88.2 %
+# Ex 1: 88.7 %
+# Ex 2:
+# Adding weight decay: 93.4 %
+# LeNet Architecture: 93.1 %
