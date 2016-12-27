@@ -231,24 +231,28 @@ def run_skip_w2v():
 
 
 # context_len: len of context around the word that should be predicted
-def generate_batch_cbow(batch_size, context_len):
+def generate_batch_cbow(batch_size, num_skips, skip_window):
     global data_index
-
-    batch = np.zeros(shape=(batch_size), dtype=np.int32)
+    assert batch_size % num_skips == 0
+    assert num_skips <= 2 * skip_window
+    batch = np.ndarray(shape=(batch_size, num_skips), dtype=np.int32)
     labels = np.ndarray(shape=(batch_size, 1), dtype=np.int32)
-
+    span = 2 * skip_window + 1 # [ skip_window target skip_window ]
+    buffer = collections.deque(maxlen=span)
+    for _ in range(span):
+        buffer.append(data[data_index])
+        data_index = (data_index + 1) % len(data)
     for i in range(batch_size):
-
-        index  = (data_index + i) % len(data)
-
-        labels[i] = data[index]
-
-        for j in range(1,context_len+1):
-            batch[i] += data[(index + j) % len(data)]
-            batch[i] += data[(index - j) % len(data)]
-
-    data_index = (data_index + batch_size) % len(data)
-
+        target = skip_window  # target label at the center of the buffer
+        labels[i, 0] = buffer[target]
+        targets_to_avoid = [ skip_window ]
+        for j in range(num_skips):
+            while target in targets_to_avoid:
+                target = random.randint(0, span - 1)
+            targets_to_avoid.append(target)
+            batch[i,j] = buffer[target]
+        buffer.append(data[data_index])
+        data_index = (data_index + 1) % len(data)
     return batch, labels
 
 
@@ -256,7 +260,8 @@ def cbow_word2vec():
 
     batch_size = 128
     embedding_size = 128 # Dimension of the embedding vector.
-    context_len = 4
+    skip_window = 1
+    num_skips = 2
     # We pick a random validation set to sample nearest neighbors. here we limit the
     # validation samples to the words that have a low numeric ID, which by
     # construction are also the most frequent.
@@ -270,7 +275,7 @@ def cbow_word2vec():
     with graph.as_default(), tf.device('/cpu:0'):
 
         # Input data.
-        train_dataset = tf.placeholder(tf.int32, shape=[batch_size])
+        train_dataset = tf.placeholder(tf.int32, shape=[batch_size, num_skips])
         train_labels = tf.placeholder(tf.int32, shape=[batch_size, 1])
         valid_dataset = tf.constant(valid_examples, dtype=tf.int32)
 
@@ -285,6 +290,7 @@ def cbow_word2vec():
         # Model.
         # Look up embeddings for inputs.
         embed = tf.nn.embedding_lookup(embeddings, train_dataset)
+        embed = tf.reduce_sum(embed, 1) # sum over the in bag words
         # Compute the softmax loss, using a sample of the negative labels each time.
         loss = tf.reduce_mean(
           tf.nn.sampled_softmax_loss(softmax_weights, softmax_biases, embed,
@@ -349,7 +355,7 @@ def run_cbow_w2v():
     two_d_embeddings = tsne.fit_transform(final_embeddings[1:num_points+1, :])
 
     words = [reverse_dictionary[i] for i in range(1, num_points+1)]
-    plot(two_d_embeddings, words)
+    plot(two_d_embeddings, words, False)
 
 
 if __name__ == '__main__':
