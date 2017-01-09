@@ -21,3 +21,11 @@ class Unet(Model):
         Returns a dictionary containing the expected model param names and their description.
         """
         pass
+
+
+    def _process_model_params(self):
+        """
+        Check model params and replace values that are not
+        present with their default.
+        """
+        pass
