@@ -58,10 +58,10 @@ class Model(object):
 
 
     # TODO implement
-    def predict(self, save_path, test_data):
+    def predict(self, save_path, test_gen):
         """
         Predict the model from a given training checkpoint.
         @param save_path: Path to training checkpoint.
-        @param test_data: Test data as numpy array.
+        @param test_gen:  Generator for the test data.
         """
         pass
