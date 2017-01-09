@@ -1,4 +1,3 @@
-
 # These are all the modules we'll be using later. Make sure you can import them
 # before proceeding further.
 from __future__ import print_function
@@ -62,7 +61,7 @@ def id2char(dictid):
     else:
         return ' '
 
-print(char2id('a'), char2id('z'), char2id(' '), char2id('ï'))
+print(char2id('a'), char2id('z'), char2id(' '), char2id('i'))
 print(id2char(1), id2char(26), id2char(0))
 
 batch_size=64
@@ -209,10 +208,10 @@ def vanilla_rnn():
         with tf.control_dependencies([saved_output.assign(output),
                                     saved_state.assign(state)]):
             # Classifier.
-            logits = tf.nn.xw_plus_b(tf.concat_v2(outputs, 0), w, b)
+            logits = tf.nn.xw_plus_b(tf.concat(0, outputs), w, b)
             loss = tf.reduce_mean(
               tf.nn.softmax_cross_entropy_with_logits(
-                logits, tf.concat_v2(train_labels, 0)))
+                logits, tf.concat(0,train_labels)))
 
         # Optimizer.
         global_step = tf.Variable(0)
@@ -244,7 +243,7 @@ def vanilla_rnn():
     summary_frequency = 100
 
     with tf.Session(graph=graph) as session:
-        tf.global_variables_initializer().run()
+        tf.initialize_all_variables().run()
         print('Initialized')
         mean_loss = 0
         for step in range(num_steps):
