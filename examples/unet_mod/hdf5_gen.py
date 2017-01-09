@@ -55,8 +55,12 @@ class Hdf5DataProvider2D(BaseDataProvider):
             image = f[self.raw_key][:,:,self.img_idx]
 
         if self.labels_path is not None:
+            #print "Loading label"
             with h5py.File(self.labels_path) as f:
-                labels = f[self.labels_key][:,:,self.img_idx]
+                tmp = f[self.labels_key][:,:,self.img_idx]
+                assert tmp.shape == label.shape
+                assert len(np.unique(tmp)) == 2
+                label[tmp>0] = True
 
         self.img_idx += 1
         return image, label
