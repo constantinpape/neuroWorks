@@ -24,7 +24,7 @@ class DataGenerator(object):
         @param first_dim_changing: Boolean that determines whether the first or last dim is
         changing along instances.
         @param n_channels: Number of channels.
-        @param List of samples in the training data that are used for validation.
+        @param validation_samples: List of samples in the training data that are used for validation.
         """
         self.n_batch    = n_batch
         self.n_channels = n_channels
@@ -113,7 +113,8 @@ class PlainTrainDataGenerator(DataGenerator):
             labels_path,
             data_key = 'data',
             labels_key = 'data',
-            first_dim_changing = True):
+            first_dim_changing = True,
+            validation_samples = []):
         """
         Init the generator.
         @param n_batch: Number of images in batch.
@@ -122,13 +123,15 @@ class PlainTrainDataGenerator(DataGenerator):
         @param data_key:  Key to the data file.
         @param labels_key:  Key to the labels file.
         @param first_dim_changing: Boolean that determines whether the first or last dim is
+        @param validation_samples: List of samples in the training data that are used for validation.
         changing along instances.
         """
 
         super(PlainTrainDataGenerator, self).__init__(n_batch,
                 data_path,
                 data_key,
-                first_dim_changing)
+                first_dim_changing = first_dim_changing,
+                validation_samples = validation_samples)
 
         self.labels_path = labels_path
         self.labels_key  = labels_key

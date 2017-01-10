@@ -24,7 +24,7 @@ class Model(object):
         tf.reset_default_graph() # TODO check what this does and if it is necessary!
 
         # declare data and label variables
-        self.n_channels = model_params["n_channels"]
+        self.n_channels = model_params.get("n_channels",1)
         self.x = tf.placeholder("float", shape = [None,None,None,self.n_channels])
         # for now, we hardcode 2 class
         self.y = tf.placeholder("float", shape = [None,None,None,2])
@@ -36,9 +36,8 @@ class Model(object):
         # TODO the U-Net example does some potential class weighting here, ignore this for now
 
         # cross entropy loss
-        loss = tf.reduce_mean(tf.nn_softmax_cross_entropy_with_logits(
-            tf.reshape(logits,[-1,2]),
-            tf.reshape(self.y,[-1,2]))
+        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits( tf.reshape(logits,[-1,2]),
+            tf.reshape(self.y,[-1,2]) ) )
 
         # TODO What is this and why do we not include regularization here
         # to keep track of gradients, deactivate for now
@@ -114,7 +113,7 @@ class Model(object):
             decay_steps = self.optimize_params.get('decay_steps',1000)
             momentum  = self.optimize_params.get('momentum',.9)
 
-            self.learning_rate_node = rf.exponential_decay(learning_rate=eta,
+            self.learning_rate_node = tf.train.exponential_decay(learning_rate=eta,
                     global_step=global_step,
                     decay_steps=decay_steps,
                     decay_rate=decay_rate,
@@ -126,14 +125,10 @@ class Model(object):
         else:
             raise AttributeError("Only momentum optimizer implemented for now, you are trying to use " + optimizer_key)
 
-
         return init
 
 
-
-    # TODO implement
-    # TODO need to incorporate validation data properly!
-    # TODO Need to specify what happens if the save_path exists
+    # TODO implement checkpoint saving
     def train(self,
         train_gen,
         save_path,
@@ -159,11 +154,11 @@ class Model(object):
         except RuntimeError:
             raise RuntimeError("The training generator has no validation data, stopping trainng.")
 
-        init = self._init_before_training(num_iters, restore_path)
+        init = self._init_before_training(save_path, restore_path)
 
         drop_prob = self.optimize_params.get('drop_prob',.9)
 
-        with tf.Session() as  sess:
+        with tf.Session() as sess:
             sess.run(init)
 
             if restore_path is not '':
@@ -171,7 +166,7 @@ class Model(object):
                 if checkpoint and checkpoint.model_checkpoint_path:
                     self.restore(sess, checkpoint.model_checkpoint_path)
 
-            pred_shape = self.run_validation(test_x, test_y) # TODO add save name
+            pred_shape = self.run_validation(sess, test_x, test_y) # TODO add save name
 
             print "Start optimization" # TODO proper logging
             for step, batch_data in enumerate(train_gen):
@@ -179,24 +174,31 @@ class Model(object):
 
                 # gradient step
                 _, loss, lr = sess.run([self.optimizer, self.loss, self.learning_rate_node ],
-                        fed_dict = {self.x : batch_x,
+                        feed_dict = {self.x : batch_x,
                                     self.y : batch_y,
                                     self.keep_prob : drop_prob})
 
                 if step % validation_iter == 0:
-                    run_validation(test_x, test_y)
+                    run_validation(test_x, test_y, sess)
                     # TODO make checkpoint point
 
                 # TODO log more stuff
                 print step, 'done'
 
-
             # save the trained net
             self.save(sess,save_path,'trained')
 
 
-    def run_validation(self,val_x,val_y,save_name=''):
-        acc, loss, pred = sess.run([self.accuracy,self.loss,self.predicter]
+    def run_validation(self,
+            session,
+            val_x,
+            val_y,
+            save_name=''):
+        """
+        Run validation.
+        """
+
+        acc, loss, pred = session.run([self.accuracy,self.loss,self.predicter],
                 feed_dict = {self.x : val_x,
                             self.y : val_y,
                             self.keep_prob : 1.})

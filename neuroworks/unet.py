@@ -4,6 +4,8 @@
 # TODO Github of tf-unet
 
 import tensorflow as tf
+import numpy as np
+from collections import OrderedDict
 
 from model import Model
 import layers
@@ -24,7 +26,7 @@ class Unet(Model):
         channels = self.n_channels
 
         nx = tf.shape(self.x)[1]
-        nx = tf.shape(self.x)[2]
+        ny = tf.shape(self.x)[2]
 
         x_image = tf.reshape(self.x, tf.pack([-1,nx,ny,self.n_channels]))
         in_node = x_image
@@ -70,7 +72,7 @@ class Unet(Model):
 
             # down-sampling with max-pooling
             if layer < n_layers-1:
-                pools[layer] = layers.max_pool(down_outputs[layer], pool_size)
+                pools[layer] = layers.max_pool2d(down_outputs[layer], pool_size)
                 in_node = pools[layer]
 
         in_node = down_outputs[n_layers-1]
@@ -81,13 +83,13 @@ class Unet(Model):
             stddev = np.sqrt(2 / (filter_size**2 * features))
 
             # weight for upsampling with deconvolution
-            wd = layers.weight_variable_devonc([pool_size, pool_size, features//2, features],
+            wd = layers.weight_variable([pool_size, pool_size, features//2, features],
                     stddev)
             # bias variables for upsampling
             bd = layers.bias_variable([features//2])
 
             # upsampling with deconvolution
-            h_deconv = tf.nn.relu(deconv2d(in_node, wd, pool_size) + bd)
+            h_deconv = tf.nn.relu(layers.deconv2d(in_node, wd, pool_size) + bd)
 
             # concatenate upsampling with skiplayer
             h_deconv_concat = layers.crop_and_concat(down_outputs[layer], h_deconv)
@@ -105,7 +107,7 @@ class Unet(Model):
             # TODO if I understand the U-Net paper right, we shouldn't use dropout here, check with Nasim
             # in-layer convolutions
             conv1 = layers.conv2d(h_deconv_concat, w1)
-            conv2 = layers.conv2d(tf.nn.relu(conv1 + b1), w2, keep_prob)
+            conv2 = layers.conv2d(tf.nn.relu(conv1 + b1), w2)
             in_node = tf.nn.relu(conv2 + b2)
             up_outputs[layer] = in_node
 
