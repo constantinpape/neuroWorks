@@ -14,7 +14,8 @@ class DataGenerator(object):
             data_path,
             data_key = 'data',
             first_dim_changing = True,
-            n_channels = 1):
+            n_channels = 1,
+            validation_samples = []):
         """
         Init the generator.
         @param n_batch: Number of images in batch.
@@ -23,9 +24,11 @@ class DataGenerator(object):
         @param first_dim_changing: Boolean that determines whether the first or last dim is
         changing along instances.
         @param n_channels: Number of channels.
+        @param List of samples in the training data that are used for validation.
         """
         self.n_batch    = n_batch
         self.n_channels = n_channels
+        self.validation_samples = validation_samples
 
         self.data_path = data_path
         self.data_key  = data_key
@@ -44,6 +47,7 @@ class DataGenerator(object):
         self.cycle_index = 0
         # TODO check with Nasim if it makes sense to randomize in this way!
         self.permutation = np.random.permutation(self.n_instances)
+
 
 
     def _next_data(self):
@@ -151,6 +155,13 @@ class PlainTrainDataGenerator(DataGenerator):
             for i in xrange(self.n_batch):
 
                 index = self.permutation[self.cycle_index]
+                # we skip the sample if they are in out validation set
+                if index in self.validation_samples:
+                    while index in self.validation_samples:
+                        self.cycle_index += 1
+                        if self.cycle_index % self.n_instances == 0:
+                            self._reset_cycle()
+                        index = self.permutation[self.cycle_index]
 
                 if self.first_dim_changing:
                     x[i,...,0] = ds_data[index]
@@ -169,7 +180,55 @@ class PlainTrainDataGenerator(DataGenerator):
                 if self.cycle_index % self.n_instances == 0:
                     self._reset_cycle()
 
+        # change back to float TODO that is not really elegant...
+        y = y.astype('float')
         return x,y
+
+
+    def get_validation_samples(self):
+        """
+        Returns the validation samples.
+        @returns: Arrays containing validation data and labels.
+        @raises: RuntimeError if no validation samples were specified.
+        """
+
+        n_validation = len(self.validation_samples)
+        if n_validation == 0:
+            raise RuntimeError("No validation samples specified")
+
+        x = np.zeros( (n_validation,) + self.data_shape )
+        labels_shape = (n_validation,) + self.data_shape[:-1] + (2,)
+        y = np.zeros( labels_shape, dtype = bool )
+
+        with h5py.File(self.data_path) as f_data,\
+            h5py.File(self.labels_path) as f_labels:
+
+            ds_data = f_data[self.data_key]
+            ds_labels = f_labels[self.labels_key]
+
+            for i, index in enumerate(self.validation_samples):
+
+                if self.first_dim_changing:
+                    x[i,...,0] = ds_data[index]
+                    y[i,...,0] = ds_labels[index]
+                else:
+                    x[i,...,0] = ds_data[...,index]
+                    y[i,...,0] = ds_labels[...,index]
+
+                # TODO should we normalize here
+                x = self._normalize(x)
+
+                # second label channel is just the first one inverted
+                y[i,...,1] = np.logical_not(y[i,...,1])
+
+                self.cycle_index += 1
+                if self.cycle_index % self.n_instances == 0:
+                    self._reset_cycle()
+
+        # change back to float TODO that is not really elegant...
+        y = y.astype('float')
+        return x,y
+
 
 
 
