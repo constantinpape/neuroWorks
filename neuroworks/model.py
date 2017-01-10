@@ -84,17 +84,14 @@ class Model(object):
         """
         Init before training.
         """
+        global_step = tf.Variable(0)
 
         # TODO what's this - gradient tracking deactivated for now
         #self.norm_gradients_node = tf.Variable(tf.constant(0.,shape=[len(self.gradients_node)]))
 
-        # TODO this needs to be changed in the new tf versions
-        init = tf.initialize_all_variables()
-
         save_folder = os.path.split(save_path)[0]
         debug_folder = os.path.join(save_folder, 'debug')
         if restore_path is not '' and os.path.exists(debug_folder):
-            # TODO log instead of printing
             shutil.rmtree(debug_folder)
 
         # make folders for debug pictures
@@ -102,7 +99,6 @@ class Model(object):
             os.makedirs(debug_folder)
 
         # get the optimizer TODO implement more than momentum
-        global_step = tf.Variable(0)
 
         optimizer_key = self.optimize_params.get('optimizer','momentum')
         if optimizer_key == 'momentum':
@@ -119,11 +115,15 @@ class Model(object):
                     decay_rate=decay_rate,
                     staircase=True) # TODO What's staircase?
 
+            # TODO what about nesterov?
             self.optimizer = tf.train.MomentumOptimizer(learning_rate = self.learning_rate_node,
-                    momentum = momentum) # TODO what about nesterov?
+                    momentum = momentum).minimize(self.loss, global_step=global_step)
 
         else:
             raise AttributeError("Only momentum optimizer implemented for now, you are trying to use " + optimizer_key)
+
+        # TODO this needs to be changed in the new tf versions
+        init = tf.initialize_all_variables()
 
         return init
 
@@ -132,15 +132,15 @@ class Model(object):
     def train(self,
         train_gen,
         save_path,
-        num_iters,
-        validation_iter,
+        num_iterations,
+        validation_step,
         restore_path = ''):
         """
         Train the model.
         @param train_gen: Generator for the training data.
         @param save_path: Path to save the final model.
-        @param num_iters: Total number of traning iterations.
-        @param validation_iter: Perform validation (and save if activated) every validation_iter.
+        @param num_iterations: Total number of traning iterations.
+        @param validation_step: Perform validation (and save if activated) every validation_iter.
         @param restore_path: Continue training from existing model.
         @return:
         """
@@ -178,12 +178,15 @@ class Model(object):
                                     self.y : batch_y,
                                     self.keep_prob : drop_prob})
 
-                if step % validation_iter == 0:
-                    run_validation(test_x, test_y, sess)
+                if step % validation_step == 0:
+                    self.run_validation(sess, test_x, test_y)
                     # TODO make checkpoint point
 
                 # TODO log more stuff
                 print step, 'done'
+
+                if step >= num_iterations:
+                    break
 
             # save the trained net
             self.save(sess,save_path,'trained')
@@ -229,7 +232,7 @@ class Model(object):
         """
         # TODO naming ?!
         saver = tf.train.Saver()
-        save_path = saver.save(session, molde_path)
+        save_path = saver.save(session, save_path)
         return save_path
 
 

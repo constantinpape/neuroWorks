@@ -23,7 +23,9 @@ def test_unet_training():
     # use default params for optimiser and architecture
     network = neuroworks.Unet( {}, {})
     # Train for 1e4 steps and evaluate every 100th step
-    network.train(gen, './tmp.ckpt', 1e4, 100)
+    iterations = 500#1e4
+    val_step   = 50#100
+    network.train(gen, './tmp.ckpt', iterations, val_step)
 
 
 
