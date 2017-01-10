@@ -225,7 +225,6 @@ class Model(object):
         @params name: Additional name indicator.
         @returns: Updated save_path.
         """
-
         # TODO naming ?!
         saver = tf.train.Saver()
         save_path = saver.save(session, molde_path)
