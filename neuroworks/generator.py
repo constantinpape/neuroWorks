@@ -3,7 +3,7 @@
 import h5py
 import numpy as np
 
-def DataGenerator(object):
+class DataGenerator(object):
     """
     Basic generator API.
     Implemented as python generator.
@@ -12,7 +12,7 @@ def DataGenerator(object):
     def __init__(self,
             n_batch,
             data_path,
-            data_key = 'data'
+            data_key = 'data',
             first_dim_changing = True,
             n_channels = 1):
         """
@@ -30,13 +30,15 @@ def DataGenerator(object):
         self.data_path = data_path
         self.data_key  = data_key
 
+        self.first_dim_changing = first_dim_changing
+
         with h5py.File(self.data_path) as f:
-            if first_dim_changing:
+            if self.first_dim_changing:
                 self.data_shape = f[self.data_key].shape[1:] + (self.n_channels,)
             else:
                 self.data_shape = f[self.data_key].shape[:-1] + (self.n_channels,)
 
-        self.n_instances = _get_num_instances(self.data_path,
+        self.n_instances = self._get_num_instances(self.data_path,
                 self.data_key)
 
         self.cycle_index = 0
@@ -96,12 +98,11 @@ def DataGenerator(object):
         self.permutation = np.random.permutation(self.n_instances)
 
 
-def PlainTrainDataGenerator(DataGenerator):
+class PlainTrainDataGenerator(DataGenerator):
     """
     Generator for plain training data.
     """
 
-    # Even if we use batch normalisation layers?
     def __init__(self,
             n_batch,
             data_path,
@@ -128,7 +129,7 @@ def PlainTrainDataGenerator(DataGenerator):
         self.labels_path = labels_path
         self.labels_key  = labels_key
 
-        assert _get_num_instances(self.labels_path, self.labels_key) == self.n_instances
+        assert self._get_num_instances(self.labels_path, self.labels_key) == self.n_instances
 
 
     def _next_data(self):
@@ -138,7 +139,8 @@ def PlainTrainDataGenerator(DataGenerator):
         """
 
         x = np.zeros( (self.n_batch,) + self.data_shape )
-        y = np.zeros( (self.n_batch,2), dtype = bool )
+        labels_shape = (self.n_batch,) + self.data_shape[:-1] + (2,)
+        y = np.zeros( labels_shape, dtype = bool )
 
         with h5py.File(self.data_path) as f_data,\
             h5py.File(self.labels_path) as f_labels:
@@ -151,12 +153,17 @@ def PlainTrainDataGenerator(DataGenerator):
                 index = self.permutation[self.cycle_index]
 
                 if self.first_dim_changing:
-                    x[i] = ds_data[index]
+                    x[i,...,0] = ds_data[index]
+                    y[i,...,0] = ds_labels[index]
                 else:
-                    x[i] = ds_data[...,index]
+                    x[i,...,0] = ds_data[...,index]
+                    y[i,...,0] = ds_labels[...,index]
 
-                y[i,0] = ds_labels[index]
-                y[i,1] = np.logical_not(y[i,1])
+                # TODO should we normalize here
+                x = self._normalize(x)
+
+                # second label channel is just the first one inverted
+                y[i,...,1] = np.logical_not(y[i,...,1])
 
                 self.cycle_index += 1
                 if self.cycle_index % self.n_instances == 0:
