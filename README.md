@@ -15,6 +15,7 @@ Neural network babysteps with tensorflow.
 
 * Normalization: How and where? What about BN-Layers?
 * Randomization of training data: Is permuting after every cycle the right thing to do?
+* U-Net: Where to apply dropout?
 
 
 ## Some ideas:
