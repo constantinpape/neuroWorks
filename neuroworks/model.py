@@ -216,10 +216,17 @@ class Model(object):
         return pred.shape
 
 
+    def restore(self,session,model_path):
+        """
+        Restores a session from a checkpoint
 
-    # TODO implement
-    def restore(self,session,checkpoint):
-        pass
+        :param sess: current session instance
+        :param model_path: path to file system checkpoint location
+        """
+
+        saver = tf.train.Saver()
+        saver.restore(sess, model_path)
+        #print("Model restored from file: %s" % model_path)
 
 
     def save(self,session,save_path,name):
@@ -236,12 +243,33 @@ class Model(object):
         return save_path
 
 
+    def predict(self, model_path, test_gen):
+        """
+        Uses the model to create a prediction for the given data
+        @param model_path: Path to the model checkpoint to restore.
+        @param test_gen: Generator for the test data.
+        @returns prediction: Prediction as ndarray.
+        """
 
-    # TODO implement
-    def predict(self, save_path, test_gen):
-        """
-        Predict the model from a given training checkpoint.
-        @param save_path: Path to training checkpoint.
-        @param test_gen:  Generator for the test data.
-        """
-        pass
+        # TODO needs to be changed for new tf
+        init = tf.initialize_all_variables()
+        with tf.Session() as sess:
+            # Initialize variables
+            sess.run(init)
+
+            # Restore model weights from previously saved model
+            self.restore(sess, model_path)
+
+            prediction = np.zeros(test_gen.output_shape, dtype = np.float32)
+            batch_size = test_gen.n_batch
+
+            # TODO I don't think we need this dummy thing
+            #y_dummy = np.empty((x_test.shape[0], x_test.shape[1], x_test.shape[2], self.n_class))
+            for i, test_batch in enumerate(test_gen):
+                pred_batch = sess.run(self.predicter, feed_dict={self.x: test_batch, self.keep_prob: 1.})
+                start = i*n_batch
+                stop  = start + pred_batch.shape[0]
+                prediction[start:stop] = pred_batch
+                print "Predition done for batch", i #TODO log instead
+
+        return prediction

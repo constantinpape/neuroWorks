@@ -48,6 +48,8 @@ class DataGenerator(object):
         # TODO check with Nasim if it makes sense to randomize in this way!
         self.permutation = np.random.permutation(self.n_instances)
 
+        # flag to indicate whether more values to iterate are present
+        self.has_values = True
 
 
     def _next_data(self):
@@ -63,7 +65,7 @@ class DataGenerator(object):
         """
         Yield the next data point.
         """
-        while True:
+        while self.has_values:
             yield self._next_data()
 
 
@@ -218,9 +220,6 @@ class PlainTrainDataGenerator(DataGenerator):
                     x[i,...,0] = ds_data[...,index]
                     y[i,...,0] = ds_labels[...,index]
 
-                # TODO should we normalize here
-                x = self._normalize(x)
-
                 # second label channel is just the first one inverted
                 y[i,...,1] = np.logical_not(y[i,...,1])
 
@@ -228,12 +227,76 @@ class PlainTrainDataGenerator(DataGenerator):
                 if self.cycle_index % self.n_instances == 0:
                     self._reset_cycle()
 
+        # TODO should we normalize the batch here
+        x = self._normalize(x)
         # change back to float TODO that is not really elegant...
         y = y.astype('float')
         return x,y
 
 
+class PlainTestDataGenerator(DataGenerator):
+    """
+    Generator for plain training data.
+    """
+
+    def __init__(self,
+            n_batch
+            data_path,
+            data_key = 'data',
+            first_dim_changing = True):
+        """
+        Init the generator.
+        @param n_batch: number of instances per prediction batch
+        @param data_path: Path to the file containing the raw data.
+        @param data_key:  Key to the data file.
+        @param first_dim_changing: Boolean that determines whether the first or last dim is
+        changing along instances.
+        """
+
+        super(PlainTestDataGenerator, self).__init__(n_batch,
+                data_path,
+                data_key,
+                first_dim_changing = first_dim_changing)
 
 
-# TODO generators for test data
+    def _next_data(self):
+        """
+        Return next data point.
+        @return: data and labels as ndarray
+        """
+
+        x = np.zeros( (self.n_batch,) + self.data_shape )
+
+        with h5py.File(self.data_path) as f_data:
+
+            ds_data = f_data[self.data_key]
+
+            for i in xrange(self.n_batch):
+
+                if self.first_dim_changing:
+                    x[i,...,0] = ds_data[index]
+                else:
+                    x[i,...,0] = ds_data[...,index]
+
+                self.cycle_index += 1
+                # stop generating data when we reach the last instance
+                if self.cycle_index == self.num_instances - 1:
+                    self.has_values = False
+                    # reshape x
+                    x = x[:,i]
+                    x = self._normalize(x)
+                    return x
+
+        # TODO should we normalize here
+        x = self._normalize(x)
+        return x
+
+
+    def output_shape(self):
+        """
+        Get the shape of the complete output
+        """
+        return (self.num_instances,) + self.data_shape
+
+
 # TODO generators with data augmentation
