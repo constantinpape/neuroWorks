@@ -240,7 +240,7 @@ class PlainTestDataGenerator(DataGenerator):
     """
 
     def __init__(self,
-            n_batch
+            n_batch,
             data_path,
             data_key = 'data',
             first_dim_changing = True):
@@ -274,16 +274,16 @@ class PlainTestDataGenerator(DataGenerator):
             for i in xrange(self.n_batch):
 
                 if self.first_dim_changing:
-                    x[i,...,0] = ds_data[index]
+                    x[i,...,0] = ds_data[self.cycle_index]
                 else:
-                    x[i,...,0] = ds_data[...,index]
+                    x[i,...,0] = ds_data[...,self.cycle_index]
 
                 self.cycle_index += 1
                 # stop generating data when we reach the last instance
-                if self.cycle_index == self.num_instances - 1:
+                if self.cycle_index == self.n_instances - 1:
                     self.has_values = False
                     # reshape x
-                    x = x[:,i]
+                    x = x[:i+1]
                     x = self._normalize(x)
                     return x
 
@@ -296,7 +296,7 @@ class PlainTestDataGenerator(DataGenerator):
         """
         Get the shape of the complete output
         """
-        return (self.num_instances,) + self.data_shape
+        return (self.n_instances,) + self.data_shape
 
 
 # TODO generators with data augmentation

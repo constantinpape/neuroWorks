@@ -1,2 +1,2 @@
-from generator import PlainTrainDataGenerator
+from generator import PlainTrainDataGenerator, PlainTestDataGenerator
 from unet import Unet

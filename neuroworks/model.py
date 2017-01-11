@@ -2,6 +2,7 @@
 
 import os
 import tensorflow as tf
+import numpy as np
 
 import layers
 
@@ -225,7 +226,7 @@ class Model(object):
         """
 
         saver = tf.train.Saver()
-        saver.restore(sess, model_path)
+        saver.restore(session, model_path)
         #print("Model restored from file: %s" % model_path)
 
 
@@ -260,16 +261,16 @@ class Model(object):
             # Restore model weights from previously saved model
             self.restore(sess, model_path)
 
-            prediction = np.zeros(test_gen.output_shape, dtype = np.float32)
+            prediction = np.zeros(test_gen.output_shape()[:-1], dtype = np.float32)
             batch_size = test_gen.n_batch
 
             # TODO I don't think we need this dummy thing
             #y_dummy = np.empty((x_test.shape[0], x_test.shape[1], x_test.shape[2], self.n_class))
             for i, test_batch in enumerate(test_gen):
                 pred_batch = sess.run(self.predicter, feed_dict={self.x: test_batch, self.keep_prob: 1.})
-                start = i*n_batch
+                start = i*batch_size
                 stop  = start + pred_batch.shape[0]
-                prediction[start:stop] = pred_batch
+                prediction[start:stop] = pred_batch[...,0] # we keep only channel 0, which corresponds to the positive class
                 print "Predition done for batch", i #TODO log instead
 
         return prediction

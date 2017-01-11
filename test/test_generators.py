@@ -10,8 +10,6 @@ sys.path.append('/home/constantin/Work/my_projects/neuroWorks/')
 
 import neuroworks
 
-print neuroworks.__file__
-
 def test_plain_generator():
     datap = '/home/constantin/Work/neurodata_hdd/isbi12_data/raw/train-volume.h5'
     labelp = '/home/constantin/Work/neurodata_hdd/isbi12_data/groundtruth/train-labels.h5'
